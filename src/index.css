@@ -1,0 +1,109 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-bengali: 'Noto Serif Bengali', 'Noto Serif', serif;
+    --font-arabic: 'Amiri', serif;
+    --font-serif: 'Noto Serif Bengali', 'Noto Serif', Georgia, serif;
+    --font-sans: 'Noto Serif Bengali', 'Noto Serif', serif;
+  }
+
+  body {
+    font-family: 'Noto Serif Bengali', 'Noto Serif', Georgia, serif;
+    background-color: #ffffff;
+    color: #0f172a;
+  }
+
+  .font-arabic {
+    font-family: var(--font-arabic);
+  }
+
+  .font-heading {
+    font-family: 'Noto Serif Bengali', 'Noto Serif', Georgia, serif;
+  }
+}
+
+/* Custom scrollbar styling for clean horizontal navigation */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* A4 Print Stylesheet */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 6mm 8mm;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-family: 'Noto Serif Bengali', 'Noto Serif', Georgia, serif !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Universal print isolation - hide entire UI except marksheet */
+  body * {
+    visibility: hidden !important;
+  }
+
+  #printable-marksheet-wrapper,
+  #printable-marksheet-wrapper *,
+  #printable-marksheet,
+  #printable-marksheet * {
+    visibility: visible !important;
+  }
+
+  #printable-marksheet {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 190mm !important;
+    margin: 0 auto !important;
+    padding: 8mm 10mm !important;
+    border: 3px double #064e3b !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-family: 'Noto Serif Bengali', 'Noto Serif', Georgia, serif !important;
+    page-break-inside: avoid !important;
+  }
+
+  #printable-marksheet * {
+    font-family: 'Noto Serif Bengali', 'Noto Serif', Georgia, serif !important;
+    color: #000000 !important;
+  }
+
+  #printable-marksheet .font-arabic {
+    font-family: 'Amiri', serif !important;
+  }
+
+  #printable-marksheet table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  #printable-marksheet th,
+  #printable-marksheet td {
+    border: 1px solid #1e293b !important;
+    padding: 4px 6px !important;
+    font-size: 10.5pt !important;
+  }
+
+  #printable-marksheet thead tr {
+    background-color: #f1f5f9 !important;
+  }
+
+  .print-signatures {
+    page-break-inside: avoid !important;
+  }
+}

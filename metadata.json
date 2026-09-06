@@ -1,0 +1,6 @@
+{
+  "name": "মাদরাসা মারকাযুল ইহসান ঢাকা - Madrasa Markazul Ihsan Dhaka",
+  "description": "মাদরাসা মারকাযুল ইহসান ঢাকা (Madrasa Markazul Ihsan Dhaka) - ঐতিহ্যবাহী দ্বীনি ও আন্তর্জাতিক কওমি শিক্ষা প্রতিষ্ঠান, পশ্চিম যাত্রাবাড়ী ও ডেমরা স্থায়ী ক্যাম্পাস, ঢাকা।",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
