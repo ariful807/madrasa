@@ -14,11 +14,75 @@ export function triggerFileDownload(dataUrl: string, fileName: string) {
   const link = document.createElement('a');
   link.href = dataUrl;
   link.download = fileName;
+  link.style.display = 'none';
   document.body.appendChild(link);
   link.click();
   setTimeout(() => {
-    document.body.removeChild(link);
+    link.remove();
   }, 200);
+}
+
+function getSafeFileName(fileName: string, extension: string): string {
+  const cleaned = fileName
+    .replace(/[\\/:*?"<>|]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const fallback = `download${extension}`;
+
+  if (!cleaned) return fallback;
+  return cleaned.toLowerCase().endsWith(extension) ? cleaned : `${cleaned}${extension}`;
+}
+
+function isDownloadUrl(url?: string): url is string {
+  if (!url || url.trim() === '' || url.trim() === '#') return false;
+
+  try {
+    const parsed = new URL(url, window.location.href);
+    return ['http:', 'https:', 'blob:', 'data:'].includes(parsed.protocol);
+  } catch {
+    return false;
+  }
+}
+
+/** Downloads a supplied PDF URL, falling back to opening it when its server blocks CORS. */
+async function downloadPdfUrl(url: string, fileName: string): Promise<boolean> {
+  const safeFileName = getSafeFileName(fileName, '.pdf');
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Unable to download file: HTTP ${response.status}`);
+
+    const blob = await response.blob();
+    if (blob.size === 0) throw new Error('The downloaded file is empty');
+
+    const objectUrl = URL.createObjectURL(blob);
+    triggerFileDownload(objectUrl, safeFileName);
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000);
+    return true;
+  } catch (error) {
+    // Some third-party file hosts do not allow CORS requests. Opening the URL still
+    // lets the user view and save the original PDF rather than silently failing.
+    console.warn('Direct PDF download failed; opening the original URL instead.', error);
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    window.setTimeout(() => link.remove(), 200);
+    return true;
+  }
+}
+
+function escapeHtml(value: string | number | undefined): string {
+  return String(value ?? '').replace(/[&<>'"]/g, character => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    "'": '&#39;',
+    '"': '&quot;'
+  }[character] ?? character));
 }
 
 /**
@@ -100,7 +164,7 @@ export async function downloadDomAsPdf(
       }
     }
 
-    const cleanName = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
+    const cleanName = getSafeFileName(fileName, '.pdf');
     pdf.save(cleanName);
     return true;
   } catch (error) {
@@ -127,7 +191,7 @@ export async function downloadDomAsImage(
     if (onProgress) onProgress('ইমেজ তৈরি হচ্ছে...');
 
     const dataUrl = await captureToDataUrl(element, 'png');
-    const cleanName = fileName.endsWith('.png') ? fileName : `${fileName}.png`;
+    const cleanName = getSafeFileName(fileName, '.png');
     triggerFileDownload(dataUrl, cleanName);
     return true;
   } catch (error) {
@@ -143,19 +207,10 @@ export async function downloadNoticeAsPdf(
   notice: NoticeItem,
   madrasaName: string = 'মারকাযুল ইহসান ঢাকা'
 ): Promise<boolean> {
-  // If notice already has a direct external PDF URL, trigger download
-  if (notice.pdfUrl && notice.pdfUrl.startsWith('http')) {
-    const link = document.createElement('a');
-    link.href = notice.pdfUrl;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.download = `Notice_${notice.id}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    setTimeout(() => {
-      document.body.removeChild(link);
-    }, 200);
-    return true;
+  // Prefer the original uploaded PDF when there is one. A generated PDF is used
+  // only for notices without a usable file URL (including the default "#" value).
+  if (isDownloadUrl(notice.pdfUrl)) {
+    return downloadPdfUrl(notice.pdfUrl, `Notice_${notice.id}`);
   }
 
   // Otherwise generate an official formatted Madrasa notice paper
@@ -181,7 +236,7 @@ export async function downloadNoticeAsPdf(
         </div>
 
         <div style="text-align: center; border-bottom: 2px solid #064e3b; padding-bottom: 16px; margin-bottom: 20px;">
-          <h1 style="font-size: 26px; font-weight: 800; color: #064e3b; margin: 0 0 6px 0;">${madrasaName}</h1>
+          <h1 style="font-size: 26px; font-weight: 800; color: #064e3b; margin: 0 0 6px 0;">${escapeHtml(madrasaName)}</h1>
           <p style="font-size: 14px; color: #334155; margin: 0 0 4px 0;">অফিসিয়াল নোটিশ বোর্ড ও কেন্দ্রীয় দফতর</p>
           <p style="font-size: 12px; color: #64748b; margin: 0;">যাত্রাবাড়ী ও ডেমরা ক্যাম্পাস, ঢাকা | হটলাইন: ০১৭১২-৮৩৬০৭৪, ০১৭৮৯-৩২২১৯৯</p>
         </div>
@@ -189,21 +244,21 @@ export async function downloadNoticeAsPdf(
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 10px; border-bottom: 1px dashed #cbd5e1; font-size: 13px;">
           <div>
             <span style="background-color: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; padding: 4px 12px; border-radius: 6px; font-weight: bold;">
-              বিভাগ: ${notice.category}
+              বিভাগ: ${escapeHtml(notice.category)}
             </span>
             ${notice.isUrgent ? '<span style="background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; padding: 4px 10px; border-radius: 6px; font-weight: bold; margin-left: 8px;">জরুরি বিজ্ঞপ্তি</span>' : ''}
           </div>
           <div style="color: #475569;">
-            <strong>তারিখ:</strong> ${notice.date}
+            <strong>তারিখ:</strong> ${escapeHtml(notice.date)}
           </div>
         </div>
 
         <div style="margin-bottom: 24px;">
           <h2 style="font-size: 20px; font-weight: bold; color: #0f172a; line-height: 1.4; margin: 0 0 16px 0;">
-            ${notice.title}
+            ${escapeHtml(notice.title)}
           </h2>
           <div style="font-size: 15px; line-height: 1.8; color: #334155; white-space: pre-line; text-align: justify;">
-            ${notice.content}
+            ${escapeHtml(notice.content)}
           </div>
         </div>
       </div>
@@ -211,7 +266,7 @@ export async function downloadNoticeAsPdf(
       <div style="margin-top: 40px; padding-top: 24px; border-top: 2px solid #cbd5e1;">
         <div style="display: flex; justify-content: space-between; align-items: flex-end;">
           <div>
-            <p style="font-size: 12px; color: #64748b; margin: 0 0 4px 0;">নোটিশ আইডি: <strong style="font-family: monospace;">${notice.id}</strong></p>
+            <p style="font-size: 12px; color: #64748b; margin: 0 0 4px 0;">নোটিশ আইডি: <strong style="font-family: monospace;">${escapeHtml(notice.id)}</strong></p>
             <p style="font-size: 12px; color: #64748b; margin: 0;">মুদ্রণ তারিখ: ${new Date().toLocaleDateString('bn-BD')}</p>
           </div>
 
@@ -220,7 +275,7 @@ export async function downloadNoticeAsPdf(
               মারকাযুল ইহসান<br/>সিলমোহর
             </div>
             <div style="border-top: 1px solid #475569; width: 140px; margin-top: 6px; padding-top: 4px; font-weight: bold; font-size: 13px; color: #0f172a;">
-              ${notice.publishedBy}
+              ${escapeHtml(notice.publishedBy)}
             </div>
           </div>
         </div>
@@ -248,6 +303,10 @@ export async function downloadSyllabusAsPdf(
   item: SyllabusItem,
   madrasaName: string = 'মারকাযুল ইহসান ঢাকা'
 ): Promise<boolean> {
+  if (isDownloadUrl(item.pdfDownloadUrl)) {
+    return downloadPdfUrl(item.pdfDownloadUrl, `Syllabus_${item.jamaat}_${item.bookName}`);
+  }
+
   const container = document.createElement('div');
   container.style.position = 'fixed';
   container.style.top = '0';
@@ -264,7 +323,7 @@ export async function downloadSyllabusAsPdf(
   container.innerHTML = `
     <div style="border: 2px solid #064e3b; padding: 30px; background: #fff;">
       <div style="text-align: center; border-bottom: 2px solid #064e3b; padding-bottom: 12px; margin-bottom: 20px;">
-        <h2 style="font-size: 22px; font-weight: bold; color: #064e3b; margin: 0 0 4px 0;">${madrasaName}</h2>
+        <h2 style="font-size: 22px; font-weight: bold; color: #064e3b; margin: 0 0 4px 0;">${escapeHtml(madrasaName)}</h2>
         <p style="font-size: 14px; color: #334155; margin: 0 0 2px 0;">শিক্ষাক্রম ও কিতাব বিবরণী</p>
         <p style="font-size: 12px; color: #64748b; margin: 0;">বেফাকুল মাদারিসিল আরাবিয়া বাংলাদেশ কারিকুলাম</p>
       </div>
@@ -273,28 +332,28 @@ export async function downloadSyllabusAsPdf(
         <tbody>
           <tr style="border-bottom: 1px solid #e2e8f0;">
             <td style="padding: 10px; font-weight: bold; width: 35%; background-color: #f8fafc;">জামাত / শ্রেণি:</td>
-            <td style="padding: 10px; font-weight: 800; color: #064e3b;">${item.jamaat} (${item.department})</td>
+            <td style="padding: 10px; font-weight: 800; color: #064e3b;">${escapeHtml(item.jamaat)} (${escapeHtml(item.department)})</td>
           </tr>
           <tr style="border-bottom: 1px solid #e2e8f0;">
             <td style="padding: 10px; font-weight: bold; background-color: #f8fafc;">বিষয়:</td>
-            <td style="padding: 10px;">${item.subjectName}</td>
+            <td style="padding: 10px;">${escapeHtml(item.subjectName)}</td>
           </tr>
           <tr style="border-bottom: 1px solid #e2e8f0;">
             <td style="padding: 10px; font-weight: bold; background-color: #f8fafc;">মূল কিতাবের নাম:</td>
-            <td style="padding: 10px; font-weight: bold;">${item.bookName}</td>
+            <td style="padding: 10px; font-weight: bold;">${escapeHtml(item.bookName)}</td>
           </tr>
           <tr style="border-bottom: 1px solid #e2e8f0;">
             <td style="padding: 10px; font-weight: bold; background-color: #f8fafc;">মুসান্নিফ / রচয়িতা:</td>
-            <td style="padding: 10px;">${item.authorName}</td>
+            <td style="padding: 10px;">${escapeHtml(item.authorName)}</td>
           </tr>
           <tr style="border-bottom: 1px solid #e2e8f0;">
             <td style="padding: 10px; font-weight: bold; background-color: #f8fafc;">মোট পূর্ণমান:</td>
-            <td style="padding: 10px;">${item.totalMarks} (লিখিত: ${item.writtenMark}, মৌখিক: ${item.oralMark})</td>
+            <td style="padding: 10px;">${escapeHtml(item.totalMarks)} (লিখিত: ${escapeHtml(item.writtenMark)}, মৌখিক: ${escapeHtml(item.oralMark)})</td>
           </tr>
           ${item.examDetails ? `
           <tr style="border-bottom: 1px solid #e2e8f0;">
             <td style="padding: 10px; font-weight: bold; background-color: #f8fafc;">পরীক্ষার বিবরণ:</td>
-            <td style="padding: 10px;">${item.examDetails}</td>
+            <td style="padding: 10px;">${escapeHtml(item.examDetails)}</td>
           </tr>
           ` : ''}
         </tbody>
